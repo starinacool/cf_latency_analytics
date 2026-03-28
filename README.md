@@ -1,5 +1,8 @@
 # Cloudflare Edge Latency Analytics
 
+<img width="1506" height="828" alt="image" src="https://github.com/user-attachments/assets/1b5c14ea-2dbb-4cd6-9978-7307c9cca0fd" />
+
+
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/your-username/cf-latency-analytics)
 
 A powerful, open-source dashboard that visualizes your Cloudflare Edge latency, origin response times, and request volume dynamically directly from the Cloudflare GraphQL Analytics API. 
