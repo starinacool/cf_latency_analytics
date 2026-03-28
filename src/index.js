@@ -29,7 +29,7 @@ async function handleLatencyRequest(request, env) {
     }
 
     const body = await request.json();
-    const { timeframe, prefix, excludePrefix, host, cacheStatus, interval, colo, country, method, groupByPath } = body;
+    const { timeframe, prefix, excludePrefix, host, cacheStatus, interval, colo, country, method, groupByPath, percentile = "90" } = body;
 
     // Determine time range
     const now = new Date();
@@ -129,8 +129,8 @@ async function handleLatencyRequest(request, env) {
                 edgeTimeToFirstByteMs
               }
               quantiles {
-                edgeTimeToFirstByteMsP90
-                originResponseDurationMsP90
+                edgeTimeToFirstByteMsP${percentile}
+                originResponseDurationMsP${percentile}
               }
             }
             # Discovery query for unique cache statuses
@@ -198,8 +198,8 @@ async function handleLatencyRequest(request, env) {
                 clientRequestPath: first.dimensions.clientRequestPath
               },
               quantiles: {
-                edgeTimeToFirstByteMsP90: Math.round(avg(chunk, 'edgeTimeToFirstByteMsP90')),
-                originResponseDurationMsP90: Math.round(avg(chunk, 'originResponseDurationMsP90'))
+                [`edgeTimeToFirstByteMsP${percentile}`]: Math.round(avg(chunk, `edgeTimeToFirstByteMsP${percentile}`)),
+                [`originResponseDurationMsP${percentile}`]: Math.round(avg(chunk, `originResponseDurationMsP${percentile}`))
               }
             });
           }
@@ -220,8 +220,8 @@ async function handleLatencyRequest(request, env) {
               cacheStatus: first.dimensions.cacheStatus
             },
             quantiles: {
-              edgeTimeToFirstByteMsP90: Math.round(avg(chunk, 'edgeTimeToFirstByteMsP90')),
-              originResponseDurationMsP90: Math.round(avg(chunk, 'originResponseDurationMsP90'))
+              [`edgeTimeToFirstByteMsP${percentile}`]: Math.round(avg(chunk, `edgeTimeToFirstByteMsP${percentile}`)),
+              [`originResponseDurationMsP${percentile}`]: Math.round(avg(chunk, `originResponseDurationMsP${percentile}`))
             }
           });
         }

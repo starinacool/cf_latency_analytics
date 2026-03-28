@@ -50,6 +50,7 @@ function App() {
   const [host, setHost] = useState(query.get('host') || '');
   const [excludePrefix, setExcludePrefix] = useState(query.get('excludePrefix') || '');
   const [groupByPath, setGroupByPath] = useState(query.get('groupByPath') === 'true');
+  const [percentile, setPercentile] = useState(query.get('percentile') || '90');
   const [availableCacheStatuses, setAvailableCacheStatuses] = useState([]);
 
   // Sync state to URL
@@ -65,10 +66,11 @@ function App() {
     if (host) params.set('host', host);
     if (excludePrefix) params.set('excludePrefix', excludePrefix);
     if (groupByPath) params.set('groupByPath', groupByPath);
+    if (percentile) params.set('percentile', percentile);
 
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
-  }, [timeframe, interval, prefix, cacheStatus, colo, country, method, host, excludePrefix, groupByPath]);
+  }, [timeframe, interval, prefix, cacheStatus, colo, country, method, host, excludePrefix, groupByPath, percentile]);
 
   // Initial fetch on mount
   useEffect(() => {
@@ -94,7 +96,8 @@ function App() {
           method: method || null,
           host: host || null,
           excludePrefix: excludePrefix || null,
-          groupByPath
+          groupByPath,
+          percentile
         }),
       });
 
@@ -147,16 +150,16 @@ function App() {
       });
     });
 
-    const p90 = groupData.map(item => item.quantiles.edgeTimeToFirstByteMsP90);
-    const originP90 = groupData.map(item => item.quantiles.originResponseDurationMsP90);
+    const pVal = groupData.map(item => item.quantiles[`edgeTimeToFirstByteMsP${percentile}`]);
+    const originPVal = groupData.map(item => item.quantiles[`originResponseDurationMsP${percentile}`]);
     const counts = groupData.map(item => item.count || 0);
 
     return {
       labels,
       datasets: [
         {
-          label: 'P90 Edge TTFB (ms)',
-          data: p90,
+          label: `P${percentile} Edge TTFB (ms)`,
+          data: pVal,
           borderColor: 'rgba(168, 85, 247, 1)',
           backgroundColor: 'rgba(168, 85, 247, 0.1)',
           fill: true,
@@ -165,8 +168,8 @@ function App() {
           yAxisID: 'y',
         },
         {
-          label: 'P90 Origin Duration (ms)',
-          data: originP90,
+          label: `P${percentile} Origin Duration (ms)`,
+          data: originPVal,
           borderColor: 'rgba(16, 185, 129, 1)',
           backgroundColor: 'rgba(16, 185, 129, 0.1)',
           fill: true,
@@ -251,6 +254,17 @@ function App() {
             <option value="10days">Last 10 Days</option>
             <option value="2weeks">Last 14 Days</option>
             <option value="month">Last 30 Days</option>
+          </select>
+        </div>
+
+        <div className="input-group">
+          <label>Percentile</label>
+          <select value={percentile} onChange={(e) => setPercentile(e.target.value)}>
+            <option value="50">P50 (Median)</option>
+            <option value="75">P75</option>
+            <option value="90">P90</option>
+            <option value="95">P95</option>
+            <option value="99">P99</option>
           </select>
         </div>
 
@@ -381,8 +395,8 @@ function App() {
         {(() => {
           const renderChartCard = (title, groupData) => {
             const groupStats = groupData && groupData.length > 0 ? {
-              avgP90: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles.edgeTimeToFirstByteMsP90 || 0), 0) / groupData.length) || 0,
-              avgOriginP90: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles.originResponseDurationMsP90 || 0), 0) / groupData.length) || 0,
+              avgPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles[`edgeTimeToFirstByteMsP${percentile}`] || 0), 0) / groupData.length) || 0,
+              avgOriginPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles[`originResponseDurationMsP${percentile}`] || 0), 0) / groupData.length) || 0,
               totalRequests: groupData.reduce((acc, curr) => acc + (curr.count || 0), 0),
             } : null;
 
@@ -398,12 +412,12 @@ function App() {
                     <div className="metric-value" style={{ color: '#3b82f6' }}>{groupStats ? groupStats.totalRequests.toLocaleString() : '--'}</div>
                   </div>
                   <div className="metric-card">
-                    <div className="metric-label">Avg P90 Edge</div>
-                    <div className="metric-value" style={{ color: '#a855f7' }}>{groupStats ? `${groupStats.avgP90}ms` : '--'}</div>
+                    <div className="metric-label">Avg P{percentile} Edge</div>
+                    <div className="metric-value" style={{ color: '#a855f7' }}>{groupStats ? `${groupStats.avgPVal}ms` : '--'}</div>
                   </div>
                   <div className="metric-card">
-                    <div className="metric-label">Avg P90 Origin</div>
-                    <div className="metric-value" style={{ color: '#10b981' }}>{groupStats ? `${groupStats.avgOriginP90}ms` : '--'}</div>
+                    <div className="metric-label">Avg P{percentile} Origin</div>
+                    <div className="metric-value" style={{ color: '#10b981' }}>{groupStats ? `${groupStats.avgOriginPVal}ms` : '--'}</div>
                   </div>
                 </div>
 
