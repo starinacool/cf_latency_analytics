@@ -248,6 +248,8 @@ function App() {
           <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
             <option value="day">Last 24 Hours</option>
             <option value="week">Last 7 Days</option>
+            <option value="10days">Last 10 Days</option>
+            <option value="2weeks">Last 14 Days</option>
             <option value="month">Last 30 Days</option>
           </select>
         </div>

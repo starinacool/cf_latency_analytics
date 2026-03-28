@@ -45,6 +45,12 @@ async function handleLatencyRequest(request, env) {
       case "week":
         after = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         break;
+      case "10days":
+        after = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000);
+        break;
+      case "2weeks":
+        after = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+        break;
       case "month":
         after = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         break;
@@ -79,6 +85,8 @@ async function handleLatencyRequest(request, env) {
       switch (timeframe) {
         case "day": step = "datetimeHour"; break;
         case "week": step = "datetimeHour"; break;
+        case "10days": step = "date"; break;
+        case "2weeks": step = "date"; break;
         case "month": step = "date"; break;
         default: step = "datetimeHour";
       }
