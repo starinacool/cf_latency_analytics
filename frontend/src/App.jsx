@@ -51,6 +51,10 @@ function App() {
   const [excludePrefix, setExcludePrefix] = useState(query.get('excludePrefix') || '');
   const [groupByPath, setGroupByPath] = useState(query.get('groupByPath') === 'true');
   const [percentile, setPercentile] = useState(query.get('percentile') || '90');
+  const [chartConfig, setChartConfig] = useState({
+    groupByPath: query.get('groupByPath') === 'true',
+    percentile: query.get('percentile') || '90'
+  });
   const [availableCacheStatuses, setAvailableCacheStatuses] = useState([]);
 
   // Sync state to URL
@@ -113,6 +117,7 @@ function App() {
 
       const zoneData = result.data.viewer.zones[0];
       setData(zoneData.httpRequestsAdaptiveGroups);
+      setChartConfig({ groupByPath, percentile });
 
       // Update available cache statuses from discovery query
       if (zoneData.discovery) {
@@ -150,15 +155,15 @@ function App() {
       });
     });
 
-    const pVal = groupData.map(item => item.quantiles[`edgeTimeToFirstByteMsP${percentile}`]);
-    const originPVal = groupData.map(item => item.quantiles[`originResponseDurationMsP${percentile}`]);
+    const pVal = groupData.map(item => item.quantiles[`edgeTimeToFirstByteMsP${chartConfig.percentile}`]);
+    const originPVal = groupData.map(item => item.quantiles[`originResponseDurationMsP${chartConfig.percentile}`]);
     const counts = groupData.map(item => item.count || 0);
 
     return {
       labels,
       datasets: [
         {
-          label: `P${percentile} Edge TTFB (ms)`,
+          label: `P${chartConfig.percentile} Edge TTFB (ms)`,
           data: pVal,
           borderColor: 'rgba(168, 85, 247, 1)',
           backgroundColor: 'rgba(168, 85, 247, 0.1)',
@@ -168,7 +173,7 @@ function App() {
           yAxisID: 'y',
         },
         {
-          label: `P${percentile} Origin Duration (ms)`,
+          label: `P${chartConfig.percentile} Origin Duration (ms)`,
           data: originPVal,
           borderColor: 'rgba(16, 185, 129, 1)',
           backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -395,8 +400,8 @@ function App() {
         {(() => {
           const renderChartCard = (title, groupData) => {
             const groupStats = groupData && groupData.length > 0 ? {
-              avgPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles[`edgeTimeToFirstByteMsP${percentile}`] || 0), 0) / groupData.length) || 0,
-              avgOriginPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles[`originResponseDurationMsP${percentile}`] || 0), 0) / groupData.length) || 0,
+              avgPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles[`edgeTimeToFirstByteMsP${chartConfig.percentile}`] || 0), 0) / groupData.length) || 0,
+              avgOriginPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles[`originResponseDurationMsP${chartConfig.percentile}`] || 0), 0) / groupData.length) || 0,
               totalRequests: groupData.reduce((acc, curr) => acc + (curr.count || 0), 0),
             } : null;
 
@@ -412,11 +417,11 @@ function App() {
                     <div className="metric-value" style={{ color: '#3b82f6' }}>{groupStats ? groupStats.totalRequests.toLocaleString() : '--'}</div>
                   </div>
                   <div className="metric-card">
-                    <div className="metric-label">Avg P{percentile} Edge</div>
+                    <div className="metric-label">Avg P{chartConfig.percentile} Edge</div>
                     <div className="metric-value" style={{ color: '#a855f7' }}>{groupStats ? `${groupStats.avgPVal}ms` : '--'}</div>
                   </div>
                   <div className="metric-card">
-                    <div className="metric-label">Avg P{percentile} Origin</div>
+                    <div className="metric-label">Avg P{chartConfig.percentile} Origin</div>
                     <div className="metric-value" style={{ color: '#10b981' }}>{groupStats ? `${groupStats.avgOriginPVal}ms` : '--'}</div>
                   </div>
                 </div>
@@ -442,7 +447,7 @@ function App() {
             return renderChartCard("Edge Latency Dynamics", []);
           }
 
-          if (groupByPath) {
+          if (chartConfig.groupByPath) {
             const groups = {};
             data.forEach(item => {
               const path = item.dimensions?.clientRequestPath || 'Unknown Path';
