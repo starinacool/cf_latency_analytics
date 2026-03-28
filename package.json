@@ -1,0 +1,23 @@
+{
+  "name": "cf-latency-analytics",
+  "version": "1.0.0",
+  "description": "An open-source custom analytics dashboard mapping Cloudflare Edge Latency with dynamic charts.",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "analytics",
+    "dashboard",
+    "latency"
+  ],
+  "author": "open-source-contributor",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^4.78.0"
+  }
+}

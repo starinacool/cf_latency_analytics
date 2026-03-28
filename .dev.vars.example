@@ -1,0 +1,9 @@
+# Replace these values with your actual Cloudflare API constraints and restart the local dev server.
+#
+# Obtain from the Cloudflare Dashboard:
+# 1. Profile > API Tokens > Create Token (Edit Zone Analytics, Read Zone, etc.)
+# 2. Zone ID can be found on your site's overview page dashboard.
+#
+# DO NOT COMMIT THIS FILE with actual keys. Use this as a reference or rename a copy to .dev.vars
+CLOUDFLARE_API_TOKEN=your_token_here
+CLOUDFLARE_ZONE_ID=your_zone_id_here
