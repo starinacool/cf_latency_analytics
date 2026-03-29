@@ -21,6 +21,7 @@ import {
   Zap,
   ShieldCheck
 } from 'lucide-react';
+import Sidebar from './Sidebar';
 
 ChartJS.register(
   CategoryScale,
@@ -38,64 +39,48 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Initialize from URL search parameters
-  const query = new URLSearchParams(window.location.search);
-  const [timeframe, setTimeframe] = useState(query.get('timeframe') || 'day');
-  const [interval, setInterval] = useState(query.get('interval') || '');
-  const [prefix, setPrefix] = useState(query.get('prefix') || '/api');
-  const [cacheStatus, setCacheStatus] = useState(query.get('cacheStatus') || '');
-  const [colo, setColo] = useState(query.get('colo') || '');
-  const [country, setCountry] = useState(query.get('country') || '');
-  const [method, setMethod] = useState(query.get('method') || '');
-  const [host, setHost] = useState(query.get('host') || '');
-  const [excludePrefix, setExcludePrefix] = useState(query.get('excludePrefix') || '');
-  const [groupByPath, setGroupByPath] = useState(query.get('groupByPath') === 'true');
-  const [percentile, setPercentile] = useState(query.get('percentile') || '90');
-  const availableMetricsOptions = [
-    { id: 'avg_edge', label: 'Avg Edge TTFB' },
-    { id: 'avg_origin', label: 'Avg Origin Duration' },
-    { id: 'p_edge', label: 'P(xx) Edge TTFB' },
-    { id: 'p_origin', label: 'P(xx) Origin Duration' },
-    { id: 'req_count', label: 'Request Count' }
-  ];
   const defaultMetrics = ['avg_edge', 'avg_origin', 'p_edge', 'p_origin', 'req_count'];
 
-  const [chartConfig, setChartConfig] = useState(() => {
+  // Initialize from URL search parameters
+  const [activeFilters, setActiveFilters] = useState(() => {
+    const query = new URLSearchParams(window.location.search);
     return {
+      timeframe: query.get('timeframe') || 'day',
+      interval: query.get('interval') || '',
+      prefix: query.get('prefix') || '/api',
+      cacheStatus: query.get('cacheStatus') || '',
+      colo: query.get('colo') || '',
+      country: query.get('country') || '',
+      method: query.get('method') || '',
+      host: query.get('host') || '',
+      excludePrefix: query.get('excludePrefix') || '',
       groupByPath: query.get('groupByPath') === 'true',
       percentile: query.get('percentile') || '90',
       metrics: query.get('metrics') ? query.get('metrics').split(',') : defaultMetrics
     };
   });
+
   const [availableCacheStatuses, setAvailableCacheStatuses] = useState([]);
-  
-  const [selectedMetrics, setSelectedMetrics] = useState(() => {
-    const queryMetrics = query.get('metrics');
-    return queryMetrics ? queryMetrics.split(',') : defaultMetrics;
-  });
 
   // Initial fetch on mount
   useEffect(() => {
-    fetchData();
+    fetchData(activeFilters);
   }, []);
 
-  const fetchData = async () => {
+  const fetchData = async (filters = activeFilters) => {
     // Sync state to URL
     const params = new URLSearchParams();
-    if (timeframe) params.set('timeframe', timeframe);
-    if (interval) params.set('interval', interval);
-    if (prefix) params.set('prefix', prefix);
-    if (cacheStatus) params.set('cacheStatus', cacheStatus);
-    if (colo) params.set('colo', colo);
-    if (country) params.set('country', country);
-    if (method) params.set('method', method);
-    if (host) params.set('host', host);
-    if (excludePrefix) params.set('excludePrefix', excludePrefix);
-    if (groupByPath) params.set('groupByPath', groupByPath);
-    if (percentile) params.set('percentile', percentile);
-    if (selectedMetrics.length !== defaultMetrics.length || !defaultMetrics.every(m => selectedMetrics.includes(m))) {
-      params.set('metrics', selectedMetrics.join(','));
-    }
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        if (key === 'metrics') {
+          if (value.length !== defaultMetrics.length || !defaultMetrics.every(m => value.includes(m))) {
+            params.set(key, value.join(','));
+          }
+        } else {
+          params.set(key, value);
+        }
+      }
+    });
 
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
@@ -108,20 +93,7 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          timeframe,
-          interval: interval || null,
-          prefix,
-          cacheStatus: cacheStatus || null,
-          colo: colo || null,
-          country: country || null,
-          method: method || null,
-          host: host || null,
-          excludePrefix: excludePrefix || null,
-          groupByPath,
-          percentile,
-          metrics: selectedMetrics
-        }),
+        body: JSON.stringify(filters),
       });
 
       const result = await response.json();
@@ -136,7 +108,7 @@ function App() {
 
       const zoneData = result.data.viewer.zones[0];
       setData(zoneData.httpRequestsAdaptiveGroups);
-      setChartConfig({ groupByPath, percentile, metrics: selectedMetrics });
+      setActiveFilters(filters);
 
       // Update available cache statuses from discovery query
       if (zoneData.discovery) {
@@ -174,8 +146,8 @@ function App() {
       });
     });
 
-    const pVal = groupData.map(item => item.quantiles?.[`edgeTimeToFirstByteMsP${chartConfig.percentile}`] || 0);
-    const originPVal = groupData.map(item => item.quantiles?.[`originResponseDurationMsP${chartConfig.percentile}`] || 0);
+    const pVal = groupData.map(item => item.quantiles?.[`edgeTimeToFirstByteMsP${activeFilters.percentile}`] || 0);
+    const originPVal = groupData.map(item => item.quantiles?.[`originResponseDurationMsP${activeFilters.percentile}`] || 0);
     const avgEdge = groupData.map(item => item.avg?.edgeTimeToFirstByteMs || 0);
     const avgOrigin = groupData.map(item => item.avg?.originResponseDurationMs || 0);
     const counts = groupData.map(item => item.count || 0);
@@ -207,7 +179,7 @@ function App() {
       },
       {
         id: 'p_edge',
-        label: `P${chartConfig.percentile} Edge TTFB (ms)`,
+        label: `P${activeFilters.percentile} Edge TTFB (ms)`,
         data: pVal,
         borderColor: 'rgba(168, 85, 247, 1)',
         backgroundColor: 'rgba(168, 85, 247, 0.1)',
@@ -218,7 +190,7 @@ function App() {
       },
       {
         id: 'p_origin',
-        label: `P${chartConfig.percentile} Origin Duration (ms)`,
+        label: `P${activeFilters.percentile} Origin Duration (ms)`,
         data: originPVal,
         borderColor: 'rgba(16, 185, 129, 1)',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
@@ -243,7 +215,7 @@ function App() {
 
     return {
       labels,
-      datasets: allDatasets.filter(ds => chartConfig.metrics.includes(ds.id)).map(({ id, ...rest }) => rest)
+      datasets: allDatasets.filter(ds => activeFilters.metrics.includes(ds.id)).map(({ id, ...rest }) => rest)
     };
   };
 
@@ -295,173 +267,12 @@ function App() {
 
   return (
     <div className="dashboard-container">
-      <div className="sidebar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-          <ShieldCheck color="#3b82f6" size={32} />
-          <h2 style={{ fontSize: '1.25rem' }}>CF Analytics</h2>
-        </div>
-
-        <div className="input-group">
-          <label>Timeframe</label>
-          <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
-            <option value="day">Last 24 Hours</option>
-            <option value="week">Last 7 Days</option>
-            <option value="10days">Last 10 Days</option>
-            <option value="2weeks">Last 14 Days</option>
-            <option value="month">Last 30 Days</option>
-          </select>
-        </div>
-
-        <div className="input-group">
-          <label>Percentile</label>
-          <select value={percentile} onChange={(e) => setPercentile(e.target.value)}>
-            <option value="50">P50 (Median)</option>
-            <option value="75">P75</option>
-            <option value="90">P90</option>
-            <option value="95">P95</option>
-            <option value="99">P99</option>
-          </select>
-        </div>
-
-        <div className="input-group">
-          <label>Metrics to Display</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
-            {availableMetricsOptions.map(metric => (
-              <label key={metric.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: '#cbd5e1' }}>
-                <input
-                  type="checkbox"
-                  checked={selectedMetrics.includes(metric.id)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedMetrics([...selectedMetrics, metric.id]);
-                    } else {
-                      setSelectedMetrics(selectedMetrics.filter(id => id !== metric.id));
-                    }
-                  }}
-                  style={{ width: 'auto', margin: 0 }}
-                />
-                {metric.label.replace('P(xx)', `P${percentile}`)}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="input-group">
-          <label>Interval</label>
-          <select value={interval} onChange={(e) => setInterval(e.target.value)}>
-            <option value="">Auto (Default)</option>
-            <option value="5m">5 Minutes</option>
-            <option value="15m">15 Minutes</option>
-            <option value="1h">1 Hour</option>
-            <option value="3h">3 Hours</option>
-            <option value="1d">1 Day</option>
-          </select>
-        </div>
-
-        <div className="input-group">
-          <label>Path</label>
-          <div style={{ position: 'relative' }}>
-            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
-            <input
-              style={{ paddingLeft: '2.5rem' }}
-              type="text"
-              value={prefix}
-              onChange={(e) => setPrefix(e.target.value)}
-              placeholder="/api/%user%"
-              onKeyDown={(e) => e.key === 'Enter' && fetchData()}
-            />
-          </div>
-        </div>
-
-        <div className="input-group">
-          <label>Exclude Path</label>
-          <div style={{ position: 'relative' }}>
-            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
-            <input
-              style={{ paddingLeft: '2.5rem' }}
-              type="text"
-              value={excludePrefix}
-              onChange={(e) => setExcludePrefix(e.target.value)}
-              placeholder="/api/%new%"
-              onKeyDown={(e) => e.key === 'Enter' && fetchData()}
-            />
-          </div>
-        </div>
-
-        <div className="input-group">
-          <label>Request Host</label>
-          <input
-            type="text"
-            value={host}
-            onChange={(e) => setHost(e.target.value)}
-            placeholder="example.com"
-          />
-        </div>
-
-        <div className="input-group">
-          <label>Cache Status</label>
-          <select value={cacheStatus} onChange={(e) => setCacheStatus(e.target.value)}>
-            <option value="">All Traffic</option>
-            {availableCacheStatuses.map(status => (
-              <option key={status} value={status}>{status.toUpperCase()}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="input-group">
-          <label>HTTP Method</label>
-          <select value={method} onChange={(e) => setMethod(e.target.value)}>
-            <option value="">All Methods</option>
-            <option value="GET">GET</option>
-            <option value="POST">POST</option>
-            <option value="PUT">PUT</option>
-            <option value="DELETE">DELETE</option>
-            <option value="PATCH">PATCH</option>
-            <option value="HEAD">HEAD</option>
-            <option value="OPTIONS">OPTIONS</option>
-          </select>
-        </div>
-
-        <div className="input-group">
-          <label>Data Center (IATA)</label>
-          <input
-            type="text"
-            value={colo}
-            onChange={(e) => setColo(e.target.value.toUpperCase())}
-            placeholder="e.g. SFO, LHR"
-          />
-        </div>
-
-        <div className="input-group">
-          <label>Country (ISO)</label>
-          <input
-            type="text"
-            value={country}
-            onChange={(e) => setCountry(e.target.value.toUpperCase())}
-            placeholder="e.g. US, GB"
-          />
-        </div>
-
-        <div className="input-group">
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={groupByPath}
-              onChange={(e) => setGroupByPath(e.target.checked)}
-              style={{ width: 'auto', margin: 0 }}
-            />
-            Group by Endpoint
-          </label>
-        </div>
-
-        <button className="btn" onClick={fetchData} disabled={loading}>
-          {loading ? <RefreshCw className="animate-spin" size={20} /> : 'Update Data'}
-        </button>
-
-        <div style={{ marginTop: 'auto', fontSize: '0.8rem', color: '#64748b' }}>
-          Deployed on Cloudflare Workers
-        </div>
-      </div>
+      <Sidebar
+        initialFilters={activeFilters}
+        availableCacheStatuses={availableCacheStatuses}
+        onUpdate={fetchData}
+        loading={loading}
+      />
 
       <div className="main-content">
         {error && (
@@ -473,8 +284,8 @@ function App() {
         {(() => {
           const renderChartCard = (title, groupData) => {
             const groupStats = groupData && groupData.length > 0 ? {
-              avgPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`edgeTimeToFirstByteMsP${chartConfig.percentile}`] || 0), 0) / groupData.length) || 0,
-              avgOriginPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`originResponseDurationMsP${chartConfig.percentile}`] || 0), 0) / groupData.length) || 0,
+              avgPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`edgeTimeToFirstByteMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
+              avgOriginPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`originResponseDurationMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
               totalRequests: groupData.reduce((acc, curr) => acc + (curr.count || 0), 0),
             } : null;
 
@@ -490,11 +301,11 @@ function App() {
                     <div className="metric-value" style={{ color: '#3b82f6' }}>{groupStats ? groupStats.totalRequests.toLocaleString() : '--'}</div>
                   </div>
                   <div className="metric-card">
-                    <div className="metric-label">Avg P{chartConfig.percentile} Edge</div>
+                    <div className="metric-label">Avg P{activeFilters.percentile} Edge</div>
                     <div className="metric-value" style={{ color: '#a855f7' }}>{groupStats ? `${groupStats.avgPVal}ms` : '--'}</div>
                   </div>
                   <div className="metric-card">
-                    <div className="metric-label">Avg P{chartConfig.percentile} Origin</div>
+                    <div className="metric-label">Avg P{activeFilters.percentile} Origin</div>
                     <div className="metric-value" style={{ color: '#10b981' }}>{groupStats ? `${groupStats.avgOriginPVal}ms` : '--'}</div>
                   </div>
                 </div>
@@ -520,7 +331,7 @@ function App() {
             return renderChartCard("Edge Latency Dynamics", []);
           }
 
-          if (chartConfig.groupByPath) {
+          if (activeFilters.groupByPath) {
             const groups = {};
             data.forEach(item => {
               const path = item.dimensions?.clientRequestPath || 'Unknown Path';
