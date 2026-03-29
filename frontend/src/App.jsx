@@ -38,6 +38,7 @@ function App() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [sortBy, setSortBy] = useState('req_count');
 
   const defaultMetrics = ['avg_edge', 'avg_origin', 'p_edge', 'p_origin', 'req_count'];
 
@@ -263,7 +264,16 @@ function App() {
     }
   };
 
-  // Stats removed since it is now card-specific
+  const getGroupStats = (groupData) => {
+    if (!groupData || groupData.length === 0) return null;
+    return {
+      avg_edge: Math.round(groupData.reduce((acc, curr) => acc + (curr.avg?.edgeTimeToFirstByteMs || 0), 0) / groupData.length) || 0,
+      avg_origin: Math.round(groupData.reduce((acc, curr) => acc + (curr.avg?.originResponseDurationMs || 0), 0) / groupData.length) || 0,
+      p_edge: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`edgeTimeToFirstByteMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
+      p_origin: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`originResponseDurationMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
+      req_count: groupData.reduce((acc, curr) => acc + (curr.count || 0), 0),
+    };
+  };
 
   return (
     <div className="dashboard-container">
@@ -294,13 +304,7 @@ function App() {
               );
             }
 
-            const stats = {
-              avg_edge: Math.round(groupData.reduce((acc, curr) => acc + (curr.avg?.edgeTimeToFirstByteMs || 0), 0) / groupData.length) || 0,
-              avg_origin: Math.round(groupData.reduce((acc, curr) => acc + (curr.avg?.originResponseDurationMs || 0), 0) / groupData.length) || 0,
-              p_edge: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`edgeTimeToFirstByteMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
-              p_origin: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`originResponseDurationMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
-              req_count: groupData.reduce((acc, curr) => acc + (curr.count || 0), 0),
-            };
+            const stats = getGroupStats(groupData);
 
             const metricDefinitions = {
               avg_edge: { label: 'Avg Edge TTFB', value: `${stats.avg_edge}ms`, color: '#d946ef' },
@@ -355,12 +359,45 @@ function App() {
               if (!groups[path]) groups[path] = [];
               groups[path].push(item);
             });
-            const paths = Object.keys(groups).sort((a, b) => {
-              const countA = groups[a].reduce((acc, curr) => acc + (curr.count || 0), 0);
-              const countB = groups[b].reduce((acc, curr) => acc + (curr.count || 0), 0);
-              return countB - countA;
+
+            const groupStatsMap = {};
+            Object.keys(groups).forEach(path => {
+              groupStatsMap[path] = getGroupStats(groups[path]);
             });
-            return paths.map(path => renderChartCard(path, groups[path]));
+
+            const paths = Object.keys(groups).sort((a, b) => {
+              const valA = groupStatsMap[a][sortBy] || 0;
+              const valB = groupStatsMap[b][sortBy] || 0;
+              return valB - valA;
+            });
+
+            const sortOptions = [
+              { id: 'req_count', label: 'Request Count' },
+              { id: 'avg_edge', label: 'Avg Edge TTFB' },
+              { id: 'avg_origin', label: 'Avg Origin Duration' },
+              { id: 'p_edge', label: `Avg P${activeFilters.percentile} Edge` },
+              { id: 'p_origin', label: `Avg P${activeFilters.percentile} Origin` },
+            ];
+
+            return (
+              <>
+                <div className="sort-controls">
+                  <div className="sort-label">Sort grouped endpoints by:</div>
+                  <div className="sort-select-wrapper">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="sort-select"
+                    >
+                      {sortOptions.map(opt => (
+                        <option key={opt.id} value={opt.id}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {paths.map(path => renderChartCard(path, groups[path]))}
+              </>
+            );
           } else {
             return renderChartCard("Edge Latency Dynamics", data);
           }
