@@ -48,7 +48,7 @@ function App() {
     return {
       timeframe: query.get('timeframe') || 'day',
       interval: query.get('interval') || '',
-      prefix: query.get('prefix') || '/api',
+      prefix: query.get('prefix') || '/api%',
       cacheStatus: query.get('cacheStatus') || '',
       colo: query.get('colo') || '',
       country: query.get('country') || '',
