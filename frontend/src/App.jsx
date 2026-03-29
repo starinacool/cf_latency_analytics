@@ -266,12 +266,16 @@ function App() {
 
   const getGroupStats = (groupData) => {
     if (!groupData || groupData.length === 0) return null;
+    const req_count = groupData.reduce((acc, curr) => acc + (curr.count || 0), 0);
+    const avg_origin = Math.round(groupData.reduce((acc, curr) => acc + (curr.avg?.originResponseDurationMs || 0), 0) / groupData.length) || 0;
+
     return {
       avg_edge: Math.round(groupData.reduce((acc, curr) => acc + (curr.avg?.edgeTimeToFirstByteMs || 0), 0) / groupData.length) || 0,
-      avg_origin: Math.round(groupData.reduce((acc, curr) => acc + (curr.avg?.originResponseDurationMs || 0), 0) / groupData.length) || 0,
+      avg_origin,
       p_edge: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`edgeTimeToFirstByteMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
       p_origin: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`originResponseDurationMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
-      req_count: groupData.reduce((acc, curr) => acc + (curr.count || 0), 0),
+      req_count,
+      cumulative_origin_ms: req_count * avg_origin,
     };
   };
 
@@ -377,6 +381,7 @@ function App() {
               { id: 'avg_origin', label: 'Avg Origin Duration' },
               { id: 'p_edge', label: `Avg P${activeFilters.percentile} Edge` },
               { id: 'p_origin', label: `Avg P${activeFilters.percentile} Origin` },
+              { id: 'cumulative_origin_ms', label: 'Cumulative Origin Time' },
             ];
 
             return (
