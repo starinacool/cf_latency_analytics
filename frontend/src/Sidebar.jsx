@@ -16,7 +16,7 @@ const availableMetricsOptions = [
 const Sidebar = ({ initialFilters, availableCacheStatuses, onUpdate, loading }) => {
   const [timeframe, setTimeframe] = useState(initialFilters.timeframe || 'day');
   const [interval, setInterval] = useState(initialFilters.interval || '');
-  const [prefix, setPrefix] = useState(initialFilters.prefix || '/api');
+  const [prefix, setPrefix] = useState(initialFilters.prefix || '/api%');
   const [cacheStatus, setCacheStatus] = useState(initialFilters.cacheStatus || '');
   const [colo, setColo] = useState(initialFilters.colo || '');
   const [country, setCountry] = useState(initialFilters.country || '');
