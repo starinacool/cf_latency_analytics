@@ -51,14 +51,36 @@ function App() {
   const [excludePrefix, setExcludePrefix] = useState(query.get('excludePrefix') || '');
   const [groupByPath, setGroupByPath] = useState(query.get('groupByPath') === 'true');
   const [percentile, setPercentile] = useState(query.get('percentile') || '90');
-  const [chartConfig, setChartConfig] = useState({
-    groupByPath: query.get('groupByPath') === 'true',
-    percentile: query.get('percentile') || '90'
+  const availableMetricsOptions = [
+    { id: 'avg_edge', label: 'Avg Edge TTFB' },
+    { id: 'avg_origin', label: 'Avg Origin Duration' },
+    { id: 'p_edge', label: 'P(xx) Edge TTFB' },
+    { id: 'p_origin', label: 'P(xx) Origin Duration' },
+    { id: 'req_count', label: 'Request Count' }
+  ];
+  const defaultMetrics = ['avg_edge', 'avg_origin', 'p_edge', 'p_origin', 'req_count'];
+
+  const [chartConfig, setChartConfig] = useState(() => {
+    return {
+      groupByPath: query.get('groupByPath') === 'true',
+      percentile: query.get('percentile') || '90',
+      metrics: query.get('metrics') ? query.get('metrics').split(',') : defaultMetrics
+    };
   });
   const [availableCacheStatuses, setAvailableCacheStatuses] = useState([]);
+  
+  const [selectedMetrics, setSelectedMetrics] = useState(() => {
+    const queryMetrics = query.get('metrics');
+    return queryMetrics ? queryMetrics.split(',') : defaultMetrics;
+  });
 
-  // Sync state to URL
+  // Initial fetch on mount
   useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    // Sync state to URL
     const params = new URLSearchParams();
     if (timeframe) params.set('timeframe', timeframe);
     if (interval) params.set('interval', interval);
@@ -71,17 +93,13 @@ function App() {
     if (excludePrefix) params.set('excludePrefix', excludePrefix);
     if (groupByPath) params.set('groupByPath', groupByPath);
     if (percentile) params.set('percentile', percentile);
+    if (selectedMetrics.length !== defaultMetrics.length || !defaultMetrics.every(m => selectedMetrics.includes(m))) {
+      params.set('metrics', selectedMetrics.join(','));
+    }
 
     const newUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, '', newUrl);
-  }, [timeframe, interval, prefix, cacheStatus, colo, country, method, host, excludePrefix, groupByPath, percentile]);
 
-  // Initial fetch on mount
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
@@ -101,7 +119,8 @@ function App() {
           host: host || null,
           excludePrefix: excludePrefix || null,
           groupByPath,
-          percentile
+          percentile,
+          metrics: selectedMetrics
         }),
       });
 
@@ -117,7 +136,7 @@ function App() {
 
       const zoneData = result.data.viewer.zones[0];
       setData(zoneData.httpRequestsAdaptiveGroups);
-      setChartConfig({ groupByPath, percentile });
+      setChartConfig({ groupByPath, percentile, metrics: selectedMetrics });
 
       // Update available cache statuses from discovery query
       if (zoneData.discovery) {
@@ -155,69 +174,76 @@ function App() {
       });
     });
 
-    const pVal = groupData.map(item => item.quantiles[`edgeTimeToFirstByteMsP${chartConfig.percentile}`]);
-    const originPVal = groupData.map(item => item.quantiles[`originResponseDurationMsP${chartConfig.percentile}`]);
+    const pVal = groupData.map(item => item.quantiles?.[`edgeTimeToFirstByteMsP${chartConfig.percentile}`] || 0);
+    const originPVal = groupData.map(item => item.quantiles?.[`originResponseDurationMsP${chartConfig.percentile}`] || 0);
     const avgEdge = groupData.map(item => item.avg?.edgeTimeToFirstByteMs || 0);
     const avgOrigin = groupData.map(item => item.avg?.originResponseDurationMs || 0);
     const counts = groupData.map(item => item.count || 0);
 
+    const allDatasets = [
+      {
+        id: 'avg_edge',
+        label: 'Avg Edge TTFB (ms)',
+        data: avgEdge,
+        borderColor: 'rgba(217, 70, 239, 1)',
+        backgroundColor: 'rgba(217, 70, 239, 0.1)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 0,
+        borderDash: [5, 5],
+        yAxisID: 'y',
+      },
+      {
+        id: 'avg_origin',
+        label: 'Avg Origin Duration (ms)',
+        data: avgOrigin,
+        borderColor: 'rgba(245, 158, 11, 1)',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        fill: false,
+        tension: 0.4,
+        pointRadius: 0,
+        borderDash: [5, 5],
+        yAxisID: 'y',
+      },
+      {
+        id: 'p_edge',
+        label: `P${chartConfig.percentile} Edge TTFB (ms)`,
+        data: pVal,
+        borderColor: 'rgba(168, 85, 247, 1)',
+        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        yAxisID: 'y',
+      },
+      {
+        id: 'p_origin',
+        label: `P${chartConfig.percentile} Origin Duration (ms)`,
+        data: originPVal,
+        borderColor: 'rgba(16, 185, 129, 1)',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        yAxisID: 'y',
+      },
+      {
+        id: 'req_count',
+        label: 'Request Count',
+        data: counts,
+        borderColor: 'rgba(59, 130, 246, 0.5)',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        yAxisID: 'y1',
+        borderWidth: 1,
+      }
+    ];
+
     return {
       labels,
-      datasets: [
-        {
-          label: 'Avg Edge TTFB (ms)',
-          data: avgEdge,
-          borderColor: 'rgba(217, 70, 239, 1)',
-          backgroundColor: 'rgba(217, 70, 239, 0.1)',
-          fill: false,
-          tension: 0.4,
-          pointRadius: 0,
-          borderDash: [5, 5],
-          yAxisID: 'y',
-        },
-        {
-          label: 'Avg Origin Duration (ms)',
-          data: avgOrigin,
-          borderColor: 'rgba(245, 158, 11, 1)',
-          backgroundColor: 'rgba(245, 158, 11, 0.1)',
-          fill: false,
-          tension: 0.4,
-          pointRadius: 0,
-          borderDash: [5, 5],
-          yAxisID: 'y',
-        },
-        {
-          label: `P${chartConfig.percentile} Edge TTFB (ms)`,
-          data: pVal,
-          borderColor: 'rgba(168, 85, 247, 1)',
-          backgroundColor: 'rgba(168, 85, 247, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          yAxisID: 'y',
-        },
-        {
-          label: `P${chartConfig.percentile} Origin Duration (ms)`,
-          data: originPVal,
-          borderColor: 'rgba(16, 185, 129, 1)',
-          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          yAxisID: 'y',
-        },
-        {
-          label: 'Request Count',
-          data: counts,
-          borderColor: 'rgba(59, 130, 246, 0.5)',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          yAxisID: 'y1',
-          borderWidth: 1,
-        }
-      ]
+      datasets: allDatasets.filter(ds => chartConfig.metrics.includes(ds.id)).map(({ id, ...rest }) => rest)
     };
   };
 
@@ -295,6 +321,29 @@ function App() {
             <option value="95">P95</option>
             <option value="99">P99</option>
           </select>
+        </div>
+
+        <div className="input-group">
+          <label>Metrics to Display</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
+            {availableMetricsOptions.map(metric => (
+              <label key={metric.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: '#cbd5e1' }}>
+                <input
+                  type="checkbox"
+                  checked={selectedMetrics.includes(metric.id)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedMetrics([...selectedMetrics, metric.id]);
+                    } else {
+                      setSelectedMetrics(selectedMetrics.filter(id => id !== metric.id));
+                    }
+                  }}
+                  style={{ width: 'auto', margin: 0 }}
+                />
+                {metric.label.replace('P(xx)', `P${percentile}`)}
+              </label>
+            ))}
+          </div>
         </div>
 
         <div className="input-group">
@@ -424,8 +473,8 @@ function App() {
         {(() => {
           const renderChartCard = (title, groupData) => {
             const groupStats = groupData && groupData.length > 0 ? {
-              avgPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles[`edgeTimeToFirstByteMsP${chartConfig.percentile}`] || 0), 0) / groupData.length) || 0,
-              avgOriginPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles[`originResponseDurationMsP${chartConfig.percentile}`] || 0), 0) / groupData.length) || 0,
+              avgPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`edgeTimeToFirstByteMsP${chartConfig.percentile}`] || 0), 0) / groupData.length) || 0,
+              avgOriginPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`originResponseDurationMsP${chartConfig.percentile}`] || 0), 0) / groupData.length) || 0,
               totalRequests: groupData.reduce((acc, curr) => acc + (curr.count || 0), 0),
             } : null;
 

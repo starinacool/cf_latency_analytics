@@ -29,7 +29,7 @@ async function handleLatencyRequest(request, env) {
     }
 
     const body = await request.json();
-    const { timeframe, prefix, excludePrefix, host, cacheStatus, interval, colo, country, method, groupByPath, percentile = "90" } = body;
+    const { timeframe, prefix, excludePrefix, host, cacheStatus, interval, colo, country, method, groupByPath, percentile = "90", metrics } = body;
 
     // Determine time range
     const now = new Date();
@@ -114,6 +114,25 @@ async function handleLatencyRequest(request, env) {
 
     const dimensionFields = groupByPath ? `\n                ${step}\n                clientRequestPath\n              ` : `\n                ${step}\n              `;
 
+    // Build aggregations dynamically based on requested metrics
+    const includeAvgEdge = !metrics || metrics.includes('avg_edge');
+    const includeAvgOrigin = !metrics || metrics.includes('avg_origin');
+    const includePEdge = !metrics || metrics.includes('p_edge');
+    const includePOrigin = !metrics || metrics.includes('p_origin');
+    const includeCount = !metrics || metrics.includes('req_count');
+
+    let avgFields = [];
+    if (includeAvgEdge) avgFields.push("edgeTimeToFirstByteMs");
+    if (includeAvgOrigin) avgFields.push("originResponseDurationMs");
+
+    let quantileFields = [];
+    if (includePEdge) quantileFields.push(`edgeTimeToFirstByteMsP${percentile}`);
+    if (includePOrigin) quantileFields.push(`originResponseDurationMsP${percentile}`);
+
+    const avgString = avgFields.length > 0 ? `avg {\n                ${avgFields.join('\n                ')}\n              }` : "";
+    const quantilesString = quantileFields.length > 0 ? `quantiles {\n                ${quantileFields.join('\n                ')}\n              }` : "";
+    const countString = includeCount ? "count" : "";
+
     const query = `
       query GetLatency($zoneTag: String!, $filter: ZoneHttpRequestsAdaptiveGroupsFilter_InputObject!, $discoveryFilter: ZoneHttpRequestsAdaptiveGroupsFilter_InputObject!) {
         viewer {
@@ -123,16 +142,10 @@ async function handleLatencyRequest(request, env) {
               filter: $filter
               orderBy: [${step}_ASC]
             ) {
-              count
+              ${countString}
               dimensions {${dimensionFields}}
-              avg {
-                edgeTimeToFirstByteMs
-                originResponseDurationMs
-              }
-              quantiles {
-                edgeTimeToFirstByteMsP${percentile}
-                originResponseDurationMsP${percentile}
-              }
+              ${avgString}
+              ${quantilesString}
             }
             # Discovery query for unique cache statuses
             discovery: httpRequestsAdaptiveGroups(
@@ -188,27 +201,30 @@ async function handleLatencyRequest(request, env) {
             if (chunk.length === 0) continue;
 
             const first = chunk[0];
-            const avg = (arr, key) => arr.reduce((acc, curr) => acc + (curr.quantiles[key] || 0), 0) / arr.length;
+            const avg = (arr, key) => arr.reduce((acc, curr) => acc + (curr.quantiles?.[key] || 0), 0) / arr.length;
             const sum = (arr) => arr.reduce((acc, curr) => acc + (curr.count || 0), 0);
 
             const avgStat = (arr, key) => arr.reduce((acc, curr) => acc + (curr.avg?.[key] || 0), 0) / arr.length;
 
-            aggregatedGroups.push({
-              count: sum(chunk),
+            let newGroup = {
               dimensions: {
                 datetimeHour: first.dimensions.datetimeHour,
                 cacheStatus: first.dimensions.cacheStatus,
                 clientRequestPath: first.dimensions.clientRequestPath
-              },
-              avg: {
-                edgeTimeToFirstByteMs: Math.round(avgStat(chunk, 'edgeTimeToFirstByteMs')),
-                originResponseDurationMs: Math.round(avgStat(chunk, 'originResponseDurationMs'))
-              },
-              quantiles: {
-                [`edgeTimeToFirstByteMsP${percentile}`]: Math.round(avg(chunk, `edgeTimeToFirstByteMsP${percentile}`)),
-                [`originResponseDurationMsP${percentile}`]: Math.round(avg(chunk, `originResponseDurationMsP${percentile}`))
               }
-            });
+            };
+            if (includeCount) newGroup.count = sum(chunk);
+            if (avgFields.length > 0) {
+              newGroup.avg = {};
+              if (includeAvgEdge) newGroup.avg.edgeTimeToFirstByteMs = Math.round(avgStat(chunk, 'edgeTimeToFirstByteMs'));
+              if (includeAvgOrigin) newGroup.avg.originResponseDurationMs = Math.round(avgStat(chunk, 'originResponseDurationMs'));
+            }
+            if (quantileFields.length > 0) {
+              newGroup.quantiles = {};
+              if (includePEdge) newGroup.quantiles[`edgeTimeToFirstByteMsP${percentile}`] = Math.round(avg(chunk, `edgeTimeToFirstByteMsP${percentile}`));
+              if (includePOrigin) newGroup.quantiles[`originResponseDurationMsP${percentile}`] = Math.round(avg(chunk, `originResponseDurationMsP${percentile}`));
+            }
+            aggregatedGroups.push(newGroup);
           }
         }
       } else {
@@ -217,26 +233,29 @@ async function handleLatencyRequest(request, env) {
           if (chunk.length === 0) continue;
 
           const first = chunk[0];
-          const avg = (arr, key) => arr.reduce((acc, curr) => acc + (curr.quantiles[key] || 0), 0) / arr.length;
+          const avg = (arr, key) => arr.reduce((acc, curr) => acc + (curr.quantiles?.[key] || 0), 0) / arr.length;
           const sum = (arr) => arr.reduce((acc, curr) => acc + (curr.count || 0), 0);
 
           const avgStat = (arr, key) => arr.reduce((acc, curr) => acc + (curr.avg?.[key] || 0), 0) / arr.length;
 
-          aggregatedGroups.push({
-            count: sum(chunk),
+          let newGroup = {
             dimensions: {
               datetimeHour: first.dimensions.datetimeHour,
               cacheStatus: first.dimensions.cacheStatus
-            },
-            avg: {
-              edgeTimeToFirstByteMs: Math.round(avgStat(chunk, 'edgeTimeToFirstByteMs')),
-              originResponseDurationMs: Math.round(avgStat(chunk, 'originResponseDurationMs'))
-            },
-            quantiles: {
-              [`edgeTimeToFirstByteMsP${percentile}`]: Math.round(avg(chunk, `edgeTimeToFirstByteMsP${percentile}`)),
-              [`originResponseDurationMsP${percentile}`]: Math.round(avg(chunk, `originResponseDurationMsP${percentile}`))
             }
-          });
+          };
+          if (includeCount) newGroup.count = sum(chunk);
+          if (avgFields.length > 0) {
+            newGroup.avg = {};
+            if (includeAvgEdge) newGroup.avg.edgeTimeToFirstByteMs = Math.round(avgStat(chunk, 'edgeTimeToFirstByteMs'));
+            if (includeAvgOrigin) newGroup.avg.originResponseDurationMs = Math.round(avgStat(chunk, 'originResponseDurationMs'));
+          }
+          if (quantileFields.length > 0) {
+            newGroup.quantiles = {};
+            if (includePEdge) newGroup.quantiles[`edgeTimeToFirstByteMsP${percentile}`] = Math.round(avg(chunk, `edgeTimeToFirstByteMsP${percentile}`));
+            if (includePOrigin) newGroup.quantiles[`originResponseDurationMsP${percentile}`] = Math.round(avg(chunk, `originResponseDurationMsP${percentile}`));
+          }
+          aggregatedGroups.push(newGroup);
         }
       }
       data.data.viewer.zones[0].httpRequestsAdaptiveGroups = aggregatedGroups;
