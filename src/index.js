@@ -127,6 +127,7 @@ async function handleLatencyRequest(request, env) {
               dimensions {${dimensionFields}}
               avg {
                 edgeTimeToFirstByteMs
+                originResponseDurationMs
               }
               quantiles {
                 edgeTimeToFirstByteMsP${percentile}
@@ -190,12 +191,18 @@ async function handleLatencyRequest(request, env) {
             const avg = (arr, key) => arr.reduce((acc, curr) => acc + (curr.quantiles[key] || 0), 0) / arr.length;
             const sum = (arr) => arr.reduce((acc, curr) => acc + (curr.count || 0), 0);
 
+            const avgStat = (arr, key) => arr.reduce((acc, curr) => acc + (curr.avg?.[key] || 0), 0) / arr.length;
+
             aggregatedGroups.push({
               count: sum(chunk),
               dimensions: {
                 datetimeHour: first.dimensions.datetimeHour,
                 cacheStatus: first.dimensions.cacheStatus,
                 clientRequestPath: first.dimensions.clientRequestPath
+              },
+              avg: {
+                edgeTimeToFirstByteMs: Math.round(avgStat(chunk, 'edgeTimeToFirstByteMs')),
+                originResponseDurationMs: Math.round(avgStat(chunk, 'originResponseDurationMs'))
               },
               quantiles: {
                 [`edgeTimeToFirstByteMsP${percentile}`]: Math.round(avg(chunk, `edgeTimeToFirstByteMsP${percentile}`)),
@@ -213,11 +220,17 @@ async function handleLatencyRequest(request, env) {
           const avg = (arr, key) => arr.reduce((acc, curr) => acc + (curr.quantiles[key] || 0), 0) / arr.length;
           const sum = (arr) => arr.reduce((acc, curr) => acc + (curr.count || 0), 0);
 
+          const avgStat = (arr, key) => arr.reduce((acc, curr) => acc + (curr.avg?.[key] || 0), 0) / arr.length;
+
           aggregatedGroups.push({
             count: sum(chunk),
             dimensions: {
               datetimeHour: first.dimensions.datetimeHour,
               cacheStatus: first.dimensions.cacheStatus
+            },
+            avg: {
+              edgeTimeToFirstByteMs: Math.round(avgStat(chunk, 'edgeTimeToFirstByteMs')),
+              originResponseDurationMs: Math.round(avgStat(chunk, 'originResponseDurationMs'))
             },
             quantiles: {
               [`edgeTimeToFirstByteMsP${percentile}`]: Math.round(avg(chunk, `edgeTimeToFirstByteMsP${percentile}`)),

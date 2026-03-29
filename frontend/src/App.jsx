@@ -157,11 +157,35 @@ function App() {
 
     const pVal = groupData.map(item => item.quantiles[`edgeTimeToFirstByteMsP${chartConfig.percentile}`]);
     const originPVal = groupData.map(item => item.quantiles[`originResponseDurationMsP${chartConfig.percentile}`]);
+    const avgEdge = groupData.map(item => item.avg?.edgeTimeToFirstByteMs || 0);
+    const avgOrigin = groupData.map(item => item.avg?.originResponseDurationMs || 0);
     const counts = groupData.map(item => item.count || 0);
 
     return {
       labels,
       datasets: [
+        {
+          label: 'Avg Edge TTFB (ms)',
+          data: avgEdge,
+          borderColor: 'rgba(217, 70, 239, 1)',
+          backgroundColor: 'rgba(217, 70, 239, 0.1)',
+          fill: false,
+          tension: 0.4,
+          pointRadius: 0,
+          borderDash: [5, 5],
+          yAxisID: 'y',
+        },
+        {
+          label: 'Avg Origin Duration (ms)',
+          data: avgOrigin,
+          borderColor: 'rgba(245, 158, 11, 1)',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          fill: false,
+          tension: 0.4,
+          pointRadius: 0,
+          borderDash: [5, 5],
+          yAxisID: 'y',
+        },
         {
           label: `P${chartConfig.percentile} Edge TTFB (ms)`,
           data: pVal,
