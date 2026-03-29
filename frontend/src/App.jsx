@@ -283,11 +283,34 @@ function App() {
 
         {(() => {
           const renderChartCard = (title, groupData) => {
-            const groupStats = groupData && groupData.length > 0 ? {
-              avgPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`edgeTimeToFirstByteMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
-              avgOriginPVal: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`originResponseDurationMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
-              totalRequests: groupData.reduce((acc, curr) => acc + (curr.count || 0), 0),
-            } : null;
+            if (!groupData || groupData.length === 0) {
+              return (
+                <div className="card" key={title} style={{ marginBottom: '2rem' }}>
+                  <div className="card-title"><Activity color="#3b82f6" /> {title}</div>
+                  <div className="chart-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                    No data available for this timeframe/prefix
+                  </div>
+                </div>
+              );
+            }
+
+            const stats = {
+              avg_edge: Math.round(groupData.reduce((acc, curr) => acc + (curr.avg?.edgeTimeToFirstByteMs || 0), 0) / groupData.length) || 0,
+              avg_origin: Math.round(groupData.reduce((acc, curr) => acc + (curr.avg?.originResponseDurationMs || 0), 0) / groupData.length) || 0,
+              p_edge: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`edgeTimeToFirstByteMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
+              p_origin: Math.round(groupData.reduce((acc, curr) => acc + (curr.quantiles?.[`originResponseDurationMsP${activeFilters.percentile}`] || 0), 0) / groupData.length) || 0,
+              req_count: groupData.reduce((acc, curr) => acc + (curr.count || 0), 0),
+            };
+
+            const metricDefinitions = {
+              avg_edge: { label: 'Avg Edge TTFB', value: `${stats.avg_edge}ms`, color: '#d946ef' },
+              avg_origin: { label: 'Avg Origin Dur.', value: `${stats.avg_origin}ms`, color: '#f59e0b' },
+              p_edge: { label: `Avg P${activeFilters.percentile} Edge`, value: `${stats.p_edge}ms`, color: '#a855f7' },
+              p_origin: { label: `Avg P${activeFilters.percentile} Origin`, value: `${stats.p_origin}ms`, color: '#10b981' },
+              req_count: { label: 'Total Requests', value: stats.req_count.toLocaleString(), color: '#3b82f6' },
+            };
+
+            const displayedMetrics = activeFilters.metrics.map(m => metricDefinitions[m]).filter(Boolean);
 
             return (
               <div className="card" key={title} style={{ marginBottom: '2rem' }}>
@@ -296,18 +319,12 @@ function App() {
                 </div>
 
                 <div className="metrics-grid" style={{ marginBottom: '2rem' }}>
-                  <div className="metric-card">
-                    <div className="metric-label">Total Requests</div>
-                    <div className="metric-value" style={{ color: '#3b82f6' }}>{groupStats ? groupStats.totalRequests.toLocaleString() : '--'}</div>
-                  </div>
-                  <div className="metric-card">
-                    <div className="metric-label">Avg P{activeFilters.percentile} Edge</div>
-                    <div className="metric-value" style={{ color: '#a855f7' }}>{groupStats ? `${groupStats.avgPVal}ms` : '--'}</div>
-                  </div>
-                  <div className="metric-card">
-                    <div className="metric-label">Avg P{activeFilters.percentile} Origin</div>
-                    <div className="metric-value" style={{ color: '#10b981' }}>{groupStats ? `${groupStats.avgOriginPVal}ms` : '--'}</div>
-                  </div>
+                  {displayedMetrics.map((m, idx) => (
+                    <div className="metric-card" key={idx}>
+                      <div className="metric-label">{m.label}</div>
+                      <div className="metric-value" style={{ color: m.color }}>{m.value}</div>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="chart-container">
