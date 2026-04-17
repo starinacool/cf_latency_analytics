@@ -39,6 +39,12 @@ async function handleLatencyRequest(request, env) {
 
     // 1. Determine timeframe (if interval not explicitly set to a larger value)
     switch (timeframe) {
+      case "hour":
+        after = new Date(now.getTime() - 60 * 60 * 1000);
+        break;
+      case "3hours":
+        after = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+        break;
       case "day":
         after = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         break;
@@ -83,6 +89,8 @@ async function handleLatencyRequest(request, env) {
     } else {
       // Automatic defaults
       switch (timeframe) {
+        case "hour": step = "datetimeFiveMinutes"; break;
+        case "3hours": step = "datetimeFifteenMinutes"; break;
         case "day": step = "datetimeHour"; break;
         case "week": step = "datetimeHour"; break;
         case "10days": step = "date"; break;

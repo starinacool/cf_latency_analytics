@@ -54,6 +54,8 @@ const Sidebar = ({ initialFilters, availableCacheStatuses, onUpdate, loading }) 
       <div className="input-group">
         <label>Timeframe</label>
         <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
+          <option value="hour">Last Hour</option>
+          <option value="3hours">Last 3 Hours</option>
           <option value="day">Last 24 Hours</option>
           <option value="week">Last 7 Days</option>
           <option value="10days">Last 10 Days</option>
