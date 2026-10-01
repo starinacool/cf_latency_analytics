@@ -29,7 +29,7 @@ async function handleLatencyRequest(request, env) {
     }
 
     const body = await request.json();
-    const { timeframe, prefix, excludePrefix, host, cacheStatus, interval, colo, country, method, groupByPath, percentile = "90", metrics } = body;
+    const { timeframe, prefix, excludePrefix, host, cacheStatus, interval, colo, country, method, groupByPath, groupByColo, percentile = "90", metrics } = body;
 
     // Determine time range
     const now = new Date();
@@ -120,7 +120,10 @@ async function handleLatencyRequest(request, env) {
       clientRequestPath_like: prefixStr
     };
 
-    const dimensionFields = groupByPath ? `\n                ${step}\n                clientRequestPath\n              ` : `\n                ${step}\n              `;
+    let dims = [step];
+    if (groupByPath) dims.push("clientRequestPath");
+    if (groupByColo) dims.push("coloCode");
+    const dimensionFields = `\n                ${dims.join('\n                ')}\n              `;
 
     // Build aggregations dynamically based on requested metrics
     const includeAvgEdge = !metrics || metrics.includes('avg_edge');
@@ -194,16 +197,18 @@ async function handleLatencyRequest(request, env) {
       const originalGroups = data.data.viewer.zones[0].httpRequestsAdaptiveGroups;
       const aggregatedGroups = [];
 
-      if (groupByPath) {
-        const pathGroups = {};
+      if (groupByPath || groupByColo) {
+        const partitionedGroups = {};
         for (const group of originalGroups) {
-          const path = group.dimensions.clientRequestPath || 'unknown';
-          if (!pathGroups[path]) pathGroups[path] = [];
-          pathGroups[path].push(group);
+          const path = groupByPath ? (group.dimensions.clientRequestPath || 'unknown') : '';
+          const colo = groupByColo ? (group.dimensions.coloCode || 'unknown') : '';
+          const key = `${path}:::${colo}`;
+          if (!partitionedGroups[key]) partitionedGroups[key] = [];
+          partitionedGroups[key].push(group);
         }
 
-        for (const path in pathGroups) {
-          const pathChunks = pathGroups[path];
+        for (const key in partitionedGroups) {
+          const pathChunks = partitionedGroups[key];
           for (let i = 0; i < pathChunks.length; i += 3) {
             const chunk = pathChunks.slice(i, i + 3);
             if (chunk.length === 0) continue;
@@ -214,12 +219,15 @@ async function handleLatencyRequest(request, env) {
 
             const avgStat = (arr, key) => arr.reduce((acc, curr) => acc + (curr.avg?.[key] || 0), 0) / arr.length;
 
+            let newDimensions = {
+              datetimeHour: first.dimensions.datetimeHour,
+            };
+            if (first.dimensions.cacheStatus) newDimensions.cacheStatus = first.dimensions.cacheStatus;
+            if (groupByPath) newDimensions.clientRequestPath = first.dimensions.clientRequestPath;
+            if (groupByColo) newDimensions.coloCode = first.dimensions.coloCode;
+
             let newGroup = {
-              dimensions: {
-                datetimeHour: first.dimensions.datetimeHour,
-                cacheStatus: first.dimensions.cacheStatus,
-                clientRequestPath: first.dimensions.clientRequestPath
-              }
+              dimensions: newDimensions
             };
             if (includeCount) newGroup.count = sum(chunk);
             if (avgFields.length > 0) {

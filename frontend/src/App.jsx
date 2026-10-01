@@ -56,6 +56,7 @@ function App() {
       host: query.get('host') || '',
       excludePrefix: query.get('excludePrefix') || '',
       groupByPath: query.get('groupByPath') === 'true',
+      groupByColo: query.get('groupByColo') === 'true',
       percentile: query.get('percentile') || '90',
       metrics: query.get('metrics') ? query.get('metrics').split(',') : defaultMetrics
     };
@@ -66,6 +67,7 @@ function App() {
   // Initial fetch on mount
   useEffect(() => {
     fetchData(activeFilters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchData = async (filters = activeFilters) => {
@@ -77,6 +79,8 @@ function App() {
           if (value.length !== defaultMetrics.length || !defaultMetrics.every(m => value.includes(m))) {
             params.set(key, value.join(','));
           }
+        } else if (typeof value === 'boolean') {
+          if (value) params.set(key, 'true');
         } else {
           params.set(key, value);
         }
@@ -214,9 +218,18 @@ function App() {
       }
     ];
 
+    const visibleMetrics = new Set(activeFilters.metrics);
+    const datasets = allDatasets
+      .filter(ds => visibleMetrics.has(ds.id))
+      .map(ds => {
+        const copy = { ...ds };
+        delete copy.id;
+        return copy;
+      });
+
     return {
       labels,
-      datasets: allDatasets.filter(ds => activeFilters.metrics.includes(ds.id)).map(({ id, ...rest }) => rest)
+      datasets
     };
   };
 
@@ -356,20 +369,32 @@ function App() {
             return renderChartCard("Edge Latency Dynamics", []);
           }
 
-          if (activeFilters.groupByPath) {
+          const isGrouped = activeFilters.groupByPath || activeFilters.groupByColo;
+
+          if (isGrouped) {
             const groups = {};
             data.forEach(item => {
-              const path = item.dimensions?.clientRequestPath || 'Unknown Path';
-              if (!groups[path]) groups[path] = [];
-              groups[path].push(item);
+              let key;
+              if (activeFilters.groupByPath && activeFilters.groupByColo) {
+                const path = item.dimensions?.clientRequestPath || 'Unknown Path';
+                const colo = item.dimensions?.coloCode || 'Unknown DC';
+                key = `${path} (${colo})`;
+              } else if (activeFilters.groupByColo) {
+                const colo = item.dimensions?.coloCode || 'Unknown DC';
+                key = `Data Center: ${colo}`;
+              } else {
+                key = item.dimensions?.clientRequestPath || 'Unknown Path';
+              }
+              if (!groups[key]) groups[key] = [];
+              groups[key].push(item);
             });
 
             const groupStatsMap = {};
-            Object.keys(groups).forEach(path => {
-              groupStatsMap[path] = getGroupStats(groups[path]);
+            Object.keys(groups).forEach(key => {
+              groupStatsMap[key] = getGroupStats(groups[key]);
             });
 
-            const paths = Object.keys(groups).sort((a, b) => {
+            const sortedKeys = Object.keys(groups).sort((a, b) => {
               const valA = groupStatsMap[a][sortBy] || 0;
               const valB = groupStatsMap[b][sortBy] || 0;
               return valB - valA;
@@ -384,10 +409,16 @@ function App() {
               { id: 'cumulative_origin_ms', label: 'Cumulative Origin Time' },
             ];
 
+            const sortLabel = (activeFilters.groupByPath && activeFilters.groupByColo)
+              ? 'Sort grouped items by:'
+              : activeFilters.groupByColo
+                ? 'Sort grouped data centers by:'
+                : 'Sort grouped endpoints by:';
+
             return (
               <>
                 <div className="sort-controls">
-                  <div className="sort-label">Sort grouped endpoints by:</div>
+                  <div className="sort-label">{sortLabel}</div>
                   <div className="sort-select-wrapper">
                     <select
                       value={sortBy}
@@ -400,7 +431,7 @@ function App() {
                     </select>
                   </div>
                 </div>
-                {paths.map(path => renderChartCard(path, groups[path]))}
+                {sortedKeys.map(key => renderChartCard(key, groups[key]))}
               </>
             );
           } else {

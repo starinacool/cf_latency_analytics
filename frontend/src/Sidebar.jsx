@@ -24,6 +24,7 @@ const Sidebar = ({ initialFilters, availableCacheStatuses, onUpdate, loading }) 
   const [host, setHost] = useState(initialFilters.host || '');
   const [excludePrefix, setExcludePrefix] = useState(initialFilters.excludePrefix || '');
   const [groupByPath, setGroupByPath] = useState(initialFilters.groupByPath || false);
+  const [groupByColo, setGroupByColo] = useState(initialFilters.groupByColo || false);
   const [percentile, setPercentile] = useState(initialFilters.percentile || '90');
   const [selectedMetrics, setSelectedMetrics] = useState(initialFilters.metrics || []);
 
@@ -39,6 +40,7 @@ const Sidebar = ({ initialFilters, availableCacheStatuses, onUpdate, loading }) 
       host,
       excludePrefix,
       groupByPath,
+      groupByColo,
       percentile,
       metrics: selectedMetrics
     });
@@ -203,6 +205,18 @@ const Sidebar = ({ initialFilters, availableCacheStatuses, onUpdate, loading }) 
             style={{ width: 'auto', margin: 0 }}
           />
           Group by Endpoint
+        </label>
+      </div>
+
+      <div className="input-group">
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={groupByColo}
+            onChange={(e) => setGroupByColo(e.target.checked)}
+            style={{ width: 'auto', margin: 0 }}
+          />
+          Group by Data center
         </label>
       </div>
 
