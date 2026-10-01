@@ -29,7 +29,7 @@ async function handleLatencyRequest(request, env) {
     }
 
     const body = await request.json();
-    const { timeframe, prefix, excludePrefix, host, cacheStatus, interval, colo, country, method, groupByPath, groupByColo, percentile = "90", metrics } = body;
+    const { timeframe, prefix, excludePrefix, host, cacheStatus, interval, colo, country, method, groupByPath, groupByColo, groupByCountry, percentile = "90", metrics } = body;
 
     // Determine time range
     const now = new Date();
@@ -123,6 +123,7 @@ async function handleLatencyRequest(request, env) {
     let dims = [step];
     if (groupByPath) dims.push("clientRequestPath");
     if (groupByColo) dims.push("coloCode");
+    if (groupByCountry) dims.push("clientCountryName");
     const dimensionFields = `\n                ${dims.join('\n                ')}\n              `;
 
     // Build aggregations dynamically based on requested metrics
@@ -197,12 +198,13 @@ async function handleLatencyRequest(request, env) {
       const originalGroups = data.data.viewer.zones[0].httpRequestsAdaptiveGroups;
       const aggregatedGroups = [];
 
-      if (groupByPath || groupByColo) {
+      if (groupByPath || groupByColo || groupByCountry) {
         const partitionedGroups = {};
         for (const group of originalGroups) {
           const path = groupByPath ? (group.dimensions.clientRequestPath || 'unknown') : '';
           const colo = groupByColo ? (group.dimensions.coloCode || 'unknown') : '';
-          const key = `${path}:::${colo}`;
+          const ctry = groupByCountry ? (group.dimensions.clientCountryName || 'unknown') : '';
+          const key = `${path}:::${colo}:::${ctry}`;
           if (!partitionedGroups[key]) partitionedGroups[key] = [];
           partitionedGroups[key].push(group);
         }
@@ -225,6 +227,7 @@ async function handleLatencyRequest(request, env) {
             if (first.dimensions.cacheStatus) newDimensions.cacheStatus = first.dimensions.cacheStatus;
             if (groupByPath) newDimensions.clientRequestPath = first.dimensions.clientRequestPath;
             if (groupByColo) newDimensions.coloCode = first.dimensions.coloCode;
+            if (groupByCountry) newDimensions.clientCountryName = first.dimensions.clientCountryName;
 
             let newGroup = {
               dimensions: newDimensions

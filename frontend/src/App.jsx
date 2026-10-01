@@ -57,6 +57,7 @@ function App() {
       excludePrefix: query.get('excludePrefix') || '',
       groupByPath: query.get('groupByPath') === 'true',
       groupByColo: query.get('groupByColo') === 'true',
+      groupByCountry: query.get('groupByCountry') === 'true',
       percentile: query.get('percentile') || '90',
       metrics: query.get('metrics') ? query.get('metrics').split(',') : defaultMetrics
     };
@@ -369,22 +370,24 @@ function App() {
             return renderChartCard("Edge Latency Dynamics", []);
           }
 
-          const isGrouped = activeFilters.groupByPath || activeFilters.groupByColo;
+          const isGrouped = activeFilters.groupByPath || activeFilters.groupByColo || activeFilters.groupByCountry;
 
           if (isGrouped) {
             const groups = {};
             data.forEach(item => {
-              let key;
-              if (activeFilters.groupByPath && activeFilters.groupByColo) {
-                const path = item.dimensions?.clientRequestPath || 'Unknown Path';
-                const colo = item.dimensions?.coloCode || 'Unknown DC';
-                key = `${path} (${colo})`;
-              } else if (activeFilters.groupByColo) {
-                const colo = item.dimensions?.coloCode || 'Unknown DC';
-                key = `Data Center: ${colo}`;
-              } else {
-                key = item.dimensions?.clientRequestPath || 'Unknown Path';
+              const parts = [];
+              if (activeFilters.groupByPath) {
+                parts.push(item.dimensions?.clientRequestPath || 'Unknown Path');
               }
+              if (activeFilters.groupByColo) {
+                const colo = item.dimensions?.coloCode || 'Unknown DC';
+                parts.push(activeFilters.groupByPath ? `DC: ${colo}` : `Data Center: ${colo}`);
+              }
+              if (activeFilters.groupByCountry) {
+                const country = item.dimensions?.clientCountryName || 'Unknown Country';
+                parts.push(`Country: ${country}`);
+              }
+              const key = parts.join(' • ');
               if (!groups[key]) groups[key] = [];
               groups[key].push(item);
             });
@@ -409,11 +412,14 @@ function App() {
               { id: 'cumulative_origin_ms', label: 'Cumulative Origin Time' },
             ];
 
-            const sortLabel = (activeFilters.groupByPath && activeFilters.groupByColo)
+            const activeGroupCount = (activeFilters.groupByPath ? 1 : 0) + (activeFilters.groupByColo ? 1 : 0) + (activeFilters.groupByCountry ? 1 : 0);
+            const sortLabel = activeGroupCount > 1
               ? 'Sort grouped items by:'
-              : activeFilters.groupByColo
-                ? 'Sort grouped data centers by:'
-                : 'Sort grouped endpoints by:';
+              : activeFilters.groupByCountry
+                ? 'Sort grouped countries by:'
+                : activeFilters.groupByColo
+                  ? 'Sort grouped data centers by:'
+                  : 'Sort grouped endpoints by:';
 
             return (
               <>

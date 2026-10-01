@@ -9,7 +9,7 @@ A powerful, open-source dashboard that visualizes your Cloudflare Edge latency, 
 
 ## ✨ Features
 * **Zero-Setup Deployment:** Comes pre-configured for Cloudflare Workers. 
-* **Dynamic Grouping:** Group your analytics by specific API endpoint, data center, or `cacheStatus`.
+* **Dynamic Grouping:** Group your analytics by specific API endpoint, data center, country, or `cacheStatus`.
 * **Deep Inspect:** Custom filters for Data Center (IATA), Country (ISO), HTTP Method, Request Host, and specific route exclusions.
 * **Smart Polling:** Selectable granularities (5m, 15m, 1h, 3h, 1d) with automated optimized grouping to sidestep Cloudflare GraphQL row limits.
 
